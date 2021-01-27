@@ -25,6 +25,9 @@ import java.util.Random;
 import java.util.Map;
 import java.util.LinkedHashMap;
 import java.nio.charset.Charset;
+import org.json.simple.JSONObject;
+import org.json.simple.JSONArray;
+import org.json.simple.parser.JSONParser;
 
 class WebServer {
   public static void main(String args[]) {
@@ -126,7 +129,7 @@ class WebServer {
       if (request == null) {
         response = "<html>Illegal request: no GET</html>".getBytes();
       } else {
-        // create output buffer
+        // // create output buffer
         StringBuilder builder = new StringBuilder();
         // NOTE: output from buffer is at the end
 
@@ -201,22 +204,27 @@ class WebServer {
           // extract path parameters
           query_pairs = splitQuery(request.replace("multiply?", ""));
 
-          // extract required fields from parameters
-          Integer num1 = Integer.parseInt(query_pairs.get("num1"));
-          Integer num2 = Integer.parseInt(query_pairs.get("num2"));
+          Integer num1;
+          Integer num2;
+          Integer result;
 
-          // do math
-          Integer result = num1 * num2;
+          try{
+            // extract required fields from parameters
+            num1 = Integer.parseInt(query_pairs.get("num1"));
+            num2 = Integer.parseInt(query_pairs.get("num2"));
+            result = num1 * num2;
 
-          // Generate response
-          builder.append("HTTP/1.1 200 OK\n");
-          builder.append("Content-Type: text/html; charset=utf-8\n");
-          builder.append("\n");
-          builder.append("Result is: " + result);
-
-          // TODO: Include error handling here with a correct error code and
-          // a response that makes sense
-
+            // Generate response
+            builder.append("HTTP/1.1 200 OK\n");
+            builder.append("Content-Type: text/html; charset=utf-8\n");
+            builder.append("\n");
+            builder.append("Result is: " + result);
+          } catch (Exception ex) {
+            builder.append("HTTP/1.1 406 Not Acceptable\n");
+            builder.append("Content-Type: text/html; charset=utf-8\n");
+            builder.append("\n");
+            builder.append("Multiply -- error: fix parameters");
+          }
         } else if (request.contains("github?")) {
           // pulls the query from the request and runs it with GitHub's REST API
           // check out https://docs.github.com/rest/reference/
@@ -228,17 +236,30 @@ class WebServer {
 
           Map<String, String> query_pairs = new LinkedHashMap<String, String>();
           query_pairs = splitQuery(request.replace("github?", ""));
-          String json = fetchURL("https://api.github.com/" + query_pairs.get("query"));
-          System.out.println(json);
+          String jsonEncoded = fetchURL("https://api.github.com/" + query_pairs.get("query"));
 
-          builder.append("Check the todos mentioned in the Java source file");
-          // TODO: Parse the JSON returned by your fetch and create an appropriate
-          // response
-          // and list the owner name, owner id and name of the public repo on your webpage, e.g.
-          // amehlhase, 46384989 -> memoranda
-          // amehlhase, 46384989 -> ser316examples
-          // amehlhase, 46384989 -> test316
+          JSONParser parser = new JSONParser();
 
+          try {
+            // Generate response
+            builder.append("HTTP/1.1 200 OK\n");
+            builder.append("Content-Type: text/html; charset=utf-8\n");
+            builder.append("\n");
+
+            Object jsonParse = parser.parse(jsonEncoded);
+            // JSONArray jsonParse = new JSONArray(jsonEncoded);
+
+            for (Object r : (JSONArray)jsonParse) {
+              JSONObject repo = (JSONObject)r;
+              JSONObject owner = (JSONObject)(repo.get("owner"));
+              builder.append(owner.get("login") + ", " + owner.get("id") + " --> " + repo.get("name") + "<br/>");
+            }
+          } catch (Exception e) {
+            builder.append("HTTP/1.1 400 Bad Request\n");
+            builder.append("Content-Type: text/html; charset=utf-8\n");
+            builder.append("\n");
+            builder.append("Error retreiving github repos");
+          }
         } else {
           // if the request is not recognized at all
 
